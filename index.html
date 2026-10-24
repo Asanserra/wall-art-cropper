@@ -1,0 +1,530 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wall Art Cropper</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-512.png">
+<meta name="theme-color" content="#111115">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.11.0/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@upscalerjs/default-model@1.0.0/dist/umd/index.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/upscaler@1.0.0/dist/browser/umd/upscaler.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@upscalerjs/esrgan-medium@1.0.0/dist/umd/models/esrgan-medium/src/umd.min.js"></script>
+<style>
+  :root {
+    --bg: #111115;
+    --card: #1a1a1f;
+    --border: #2a2a30;
+    --gold: #c9a55a;
+    --gold-dark: #a07c3a;
+    --text: #e8e6e1;
+    --muted: #777;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', system-ui, sans-serif;
+    font-size: 14px;
+  }
+  .container { max-width: 720px; margin: 0 auto; padding: 32px 16px 64px; }
+  h1 {
+    font-family: 'Playfair Display', Georgia, serif;
+    font-weight: 700;
+    font-size: 34px;
+    margin: 0 0 4px;
+    color: var(--gold);
+  }
+  .subtitle { color: var(--muted); margin: 0 0 24px; }
+  label.field { display: block; font-weight: 600; margin-bottom: 6px; }
+  .hint { color: var(--muted); font-weight: 400; }
+  input[type=text], select {
+    width: 100%;
+    background: var(--card);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font: inherit;
+  }
+  input[type=text]:focus, select:focus { outline: none; border-color: var(--gold); }
+  .drop {
+    margin: 20px 0 28px;
+    border: 2px dashed var(--border);
+    border-radius: 12px;
+    padding: 36px 16px;
+    text-align: center;
+    cursor: pointer;
+    color: var(--muted);
+    transition: border-color .15s, background .15s, color .15s;
+  }
+  .drop strong { color: var(--text); font-weight: 600; }
+  .drop:hover, .drop.over { border-color: var(--gold); background: rgba(201,165,90,.06); color: var(--gold); }
+  .empty { text-align: center; color: #666; padding: 40px 0; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px;
+    margin-bottom: 20px;
+  }
+  .card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 14px; }
+  .fname { font-weight: 700; word-break: break-all; }
+  .meta { color: var(--muted); font-size: 13px; margin-top: 2px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .badge {
+    background: rgba(201,165,90,.15);
+    color: var(--gold);
+    border: 1px solid rgba(201,165,90,.4);
+    border-radius: 999px;
+    padding: 1px 8px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .remove {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    border-radius: 6px;
+    width: 30px; height: 30px;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .remove:hover { color: var(--text); border-color: #666; }
+  .preview { position: relative; margin: 0 auto 16px; max-width: 100%; }
+  .preview img { display: block; width: 100%; height: 100%; border-radius: 4px; }
+  .overlay { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; }
+  .overlay .crop { cursor: move; }
+  .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+  .lbl { color: var(--muted); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; width: 92px; }
+  .btn {
+    background: #333;
+    color: #aaa;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    padding: 7px 12px;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .btn:hover { color: var(--text); }
+  .btn.on { background: rgba(201,165,90,.15); border-color: var(--gold); color: var(--gold); }
+  .row select { width: auto; flex: 1; min-width: 140px; padding: 7px 10px; }
+  .generate {
+    width: 100%;
+    margin-top: 4px;
+    border: none;
+    border-radius: 8px;
+    padding: 12px;
+    background: linear-gradient(135deg, var(--gold), var(--gold-dark));
+    color: #111115;
+    font: inherit;
+    font-weight: 700;
+    font-size: 15px;
+    cursor: pointer;
+  }
+  .generate:disabled { background: #333; color: #777; cursor: default; }
+  .results { margin-top: 18px; border-top: 1px solid var(--border); padding-top: 16px; }
+  .results-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; font-weight: 700; }
+  .results-head .note { color: var(--muted); font-weight: 400; font-size: 12px; margin-left: 8px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; }
+  .result { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px; text-align: center; }
+  .result img { max-width: 100%; max-height: 140px; display: block; margin: 0 auto 8px; }
+  .rl { font-weight: 700; }
+  .rd { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
+  .result .btn, .results-head .btn { background: transparent; border-color: var(--gold); color: var(--gold); }
+  .result .btn { width: 100%; }
+  .result .btn:hover, .results-head .btn:hover { background: rgba(201,165,90,.15); }
+  .btn:disabled { border-color: #333; color: #666; cursor: default; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Wall Art Cropper</h1>
+  <p class="subtitle">Batch-crop images into standard print sizes at 300 DPI, AI-upscaled when the source is too small.</p>
+
+  <label class="field" for="prefix">Filename prefix <span class="hint">— blank uses each image's filename</span></label>
+  <input type="text" id="prefix" placeholder="e.g. sunset-beach">
+
+  <div class="drop" id="drop">
+    <strong>Drop images here</strong> or click to browse<br>
+    JPEG or PNG, multiple files allowed
+    <input type="file" id="file" accept="image/jpeg,image/png" multiple hidden>
+  </div>
+
+  <div id="cards"></div>
+</div>
+
+<script>
+const DPI = 300;
+// Browsers refuse canvases wider/taller than this, so cap the upscaled source to it.
+const MAX_SIDE = 16384;
+const upscalers = {};
+const SIZES = {
+  portrait: [
+    { label: '4x6', w: 4, h: 6 },
+    { label: '5x7', w: 5, h: 7 },
+    { label: '8x10', w: 8, h: 10 },
+    { label: '11x14', w: 11, h: 14 },
+  ],
+  landscape: [
+    { label: '9x12', w: 12, h: 9 },
+    { label: '16x20', w: 20, h: 16 },
+    { label: '18x24', w: 24, h: 18 },
+    { label: '24x36', w: 36, h: 24 },
+    { label: 'A2', w: 23.4, h: 16.5 },
+  ],
+};
+
+const images = [];
+const cards = document.getElementById('cards');
+const prefixInput = document.getElementById('prefix');
+let drag = null;
+
+const esc = s => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const clamp = (v, min, max) => Math.min(Math.max(v, min), max);
+const tick = () => new Promise(r => setTimeout(r, 20));
+const sizeName = s => s.label === 'A2' ? 'A2' : s.label.replace('x', '×') + '"';
+
+function slugify(name) {
+  return name.replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9]+/g, '_');
+}
+
+function prefixFor(item) {
+  return prefixInput.value.trim() || slugify(item.name);
+}
+
+function autoCrop(item, size) {
+  const ratio = size.w / size.h;
+  let w, h;
+  if (item.w / item.h > ratio) { h = item.h; w = h * ratio; }
+  else { w = item.w; h = w / ratio; }
+  return { x: (item.w - w) / 2, y: (item.h - h) / 2, w, h };
+}
+
+function cropFor(item, idx) {
+  const crop = autoCrop(item, SIZES[item.orientation][idx]);
+  const manual = item.crops[`${item.orientation}_${idx}`];
+  return manual ? { ...crop, x: manual.x, y: manual.y } : crop;
+}
+
+function addFiles(files) {
+  for (const file of files) {
+    if (!/^image\/(jpeg|png)$/.test(file.type)) continue;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        images.push({
+          name: file.name,
+          src: reader.result,
+          img,
+          w: img.naturalWidth,
+          h: img.naturalHeight,
+          orientation: 'portrait',
+          selected: SIZES.portrait.map(() => true),
+          manual: false,
+          manualIdx: 0,
+          crops: {},
+          upscaled: {},
+          results: [],
+          resultScale: 1,
+        });
+        renderAll();
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  }
+}
+
+function overlayHTML(item, i) {
+  const c = cropFor(item, item.manualIdx);
+  return `<svg class="overlay" viewBox="0 0 ${item.w} ${item.h}" preserveAspectRatio="none">
+    <defs><mask id="mask${i}">
+      <rect width="${item.w}" height="${item.h}" fill="white"/>
+      <rect class="hole" x="${c.x}" y="${c.y}" width="${c.w}" height="${c.h}" fill="black"/>
+    </mask></defs>
+    <rect width="${item.w}" height="${item.h}" fill="rgba(0,0,0,0.6)" mask="url(#mask${i})"/>
+    <rect class="crop" x="${c.x}" y="${c.y}" width="${c.w}" height="${c.h}" fill="transparent" pointer-events="all"
+      stroke="white" stroke-width="2" stroke-dasharray="6 4" vector-effect="non-scaling-stroke"/>
+  </svg>`;
+}
+
+function cardHTML(item, i) {
+  const sizes = SIZES[item.orientation];
+  const scale = Math.min(680 / item.w, 320 / item.h);
+  const is169 = Math.abs(item.w / item.h - 16 / 9) < 0.01;
+  const anySelected = item.selected.some(Boolean);
+
+  const options = sizes.map((s, k) =>
+    `<option value="${k}" ${k === item.manualIdx ? 'selected' : ''}>${sizeName(s)}${item.crops[`${item.orientation}_${k}`] ? ' ✓' : ''}</option>`
+  ).join('');
+
+  const results = item.results.length ? `
+    <div class="results">
+      <div class="results-head">
+        <span>Results${item.resultScale > 1 ? `<span class="note">AI-upscaled ×${item.resultScale}</span>` : ''}</span>
+        <button class="btn" data-action="zip">Download All (.zip)</button>
+      </div>
+      <div class="grid">
+        ${item.results.map((r, k) => `
+          <div class="result">
+            <img src="${r.thumb}" alt="${r.label}">
+            <div class="rl">${r.label}</div>
+            <div class="rd">${r.w} × ${r.h}px</div>
+            <button class="btn" data-action="download" data-k="${k}">Download</button>
+          </div>`).join('')}
+      </div>
+    </div>` : '';
+
+  return `<div class="card" data-i="${i}">
+    <div class="card-head">
+      <div>
+        <div class="fname">${esc(item.name)}</div>
+        <div class="meta">${item.w} × ${item.h}px ${is169 ? '' : '<span class="badge">⚠ Not 16:9</span>'}</div>
+      </div>
+      <button class="remove" data-action="remove" title="Remove image">✕</button>
+    </div>
+    <div class="preview" style="width:${Math.round(item.w * scale)}px;aspect-ratio:${item.w}/${item.h}">
+      <img src="${item.src}" alt="">
+      ${item.manual ? overlayHTML(item, i) : ''}
+    </div>
+    <div class="row">
+      <span class="lbl">Orientation</span>
+      <button class="btn ${item.orientation === 'portrait' ? 'on' : ''}" data-action="orient" data-v="portrait">Portrait</button>
+      <button class="btn ${item.orientation === 'landscape' ? 'on' : ''}" data-action="orient" data-v="landscape">Landscape</button>
+    </div>
+    <div class="row">
+      <span class="lbl">Sizes</span>
+      ${sizes.map((s, k) => `<button class="btn ${item.selected[k] ? 'on' : ''}" data-action="size" data-k="${k}">${sizeName(s)}</button>`).join('')}
+    </div>
+    <div class="row">
+      <span class="lbl">Crop</span>
+      <button class="btn ${item.manual ? 'on' : ''}" data-action="manual">Manual crop: ${item.manual ? 'On' : 'Off'}</button>
+      ${item.manual ? `<select data-action="pick">${options}</select>` : ''}
+    </div>
+    <button class="generate" data-action="generate" ${anySelected ? '' : 'disabled'}>Generate Crops</button>
+    ${results}
+  </div>`;
+}
+
+function renderAll() {
+  cards.innerHTML = images.length
+    ? images.map(cardHTML).join('')
+    : '<div class="empty">No images loaded yet</div>';
+}
+
+function refresh(item) {
+  const i = images.indexOf(item);
+  if (i >= 0) cards.children[i].outerHTML = cardHTML(item, i);
+}
+
+function download(url, filename) {
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+// Smallest model scale (2 or 4) that brings every picked crop to 300 DPI, limited by MAX_SIDE.
+// Anything still short after ×4 is finished by the canvas resize.
+function upscaleFactor(item, picked) {
+  const sizes = SIZES[item.orientation];
+  const needed = Math.max(...picked.map(k => (sizes[k].w * DPI) / cropFor(item, k).w));
+  let scale = needed <= 1 ? 1 : needed <= 2 ? 2 : 4;
+  while (scale > 1 && Math.max(item.w, item.h) * scale > MAX_SIDE) scale /= 2;
+  return scale;
+}
+
+async function upscaledSource(item, scale, onProgress) {
+  if (!item.upscaled[scale]) {
+    upscalers[scale] ??= new Upscaler({ model: ESRGANMedium[`x${scale}`] });
+    const src = await upscalers[scale].upscale(item.img, {
+      patchSize: 128,
+      padding: 4,
+      awaitNextFrame: true,
+      progress: onProgress,
+    });
+    const img = new Image();
+    img.src = src;
+    await img.decode();
+    item.upscaled[scale] = img;
+  }
+  return item.upscaled[scale];
+}
+
+async function generate(item, btn) {
+  const sizes = SIZES[item.orientation];
+  const picked = sizes.map((s, k) => k).filter(k => item.selected[k]);
+  btn.disabled = true;
+  item.results = [];
+
+  const scale = upscaleFactor(item, picked);
+  let source = item.img;
+  if (scale > 1) {
+    btn.textContent = `Loading AI upscaler ×${scale}…`;
+    try {
+      source = await upscaledSource(item, scale, p => {
+        btn.textContent = `Upscaling ×${scale}… ${Math.round(p * 100)}%`;
+      });
+    } catch (err) {
+      alert(`Upscaling failed, cropping from the original instead.\n\n${err.message}`);
+    }
+  }
+  const ratio = source.naturalWidth / item.w;
+  item.resultScale = ratio;
+
+  for (const [n, k] of picked.entries()) {
+    btn.textContent = `Generating… ${n + 1}/${picked.length}`;
+    await tick();
+    const size = sizes[k];
+    const c = cropFor(item, k);
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(size.w * DPI);
+    canvas.height = Math.round(size.h * DPI);
+    const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(source, c.x * ratio, c.y * ratio, c.w * ratio, c.h * ratio, 0, 0, canvas.width, canvas.height);
+
+    // Small separate thumbnail so re-rendering cards doesn't re-parse multi-MB data URLs.
+    const thumb = document.createElement('canvas');
+    const ts = 280 / Math.max(canvas.width, canvas.height);
+    thumb.width = Math.round(canvas.width * ts);
+    thumb.height = Math.round(canvas.height * ts);
+    thumb.getContext('2d').drawImage(canvas, 0, 0, thumb.width, thumb.height);
+
+    item.results.push({
+      label: size.label,
+      w: canvas.width,
+      h: canvas.height,
+      url: canvas.toDataURL('image/jpeg', 1.0),
+      thumb: thumb.toDataURL('image/jpeg', 0.85),
+    });
+  }
+  refresh(item);
+}
+
+async function zipAll(item, btn) {
+  btn.disabled = true;
+  btn.textContent = '⏳ Zipping…';
+  const prefix = prefixFor(item);
+  const zip = new JSZip();
+  const folder = zip.folder(prefix);
+  for (const r of item.results) folder.file(`${prefix}_${r.label}.jpg`, r.url.split(',')[1], { base64: true });
+  const blob = await zip.generateAsync({ type: 'blob' });
+  const url = URL.createObjectURL(blob);
+  download(url, `${prefix}_crops.zip`);
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+  btn.disabled = false;
+  btn.textContent = 'Download All (.zip)';
+}
+
+cards.addEventListener('click', e => {
+  const el = e.target.closest('[data-action]');
+  if (!el || el.tagName === 'SELECT') return;
+  const item = images[+el.closest('.card').dataset.i];
+  switch (el.dataset.action) {
+    case 'remove':
+      images.splice(images.indexOf(item), 1);
+      renderAll();
+      break;
+    case 'orient':
+      if (item.orientation === el.dataset.v) return;
+      item.orientation = el.dataset.v;
+      item.selected = SIZES[item.orientation].map(() => true);
+      item.results = [];
+      item.manualIdx = 0;
+      refresh(item);
+      break;
+    case 'size':
+      item.selected[+el.dataset.k] = !item.selected[+el.dataset.k];
+      refresh(item);
+      break;
+    case 'manual':
+      item.manual = !item.manual;
+      refresh(item);
+      break;
+    case 'generate':
+      generate(item, el);
+      break;
+    case 'download': {
+      const r = item.results[+el.dataset.k];
+      download(r.url, `${prefixFor(item)}_${r.label}.jpg`);
+      break;
+    }
+    case 'zip':
+      zipAll(item, el);
+      break;
+  }
+});
+
+cards.addEventListener('change', e => {
+  if (e.target.dataset.action !== 'pick') return;
+  const item = images[+e.target.closest('.card').dataset.i];
+  item.manualIdx = +e.target.value;
+  refresh(item);
+});
+
+cards.addEventListener('pointerdown', e => {
+  const rect = e.target.closest('.crop');
+  if (!rect) return;
+  e.preventDefault();
+  const card = rect.closest('.card');
+  const item = images[+card.dataset.i];
+  const svg = rect.ownerSVGElement;
+  const crop = cropFor(item, item.manualIdx);
+  drag = {
+    item, card, svg, crop,
+    startX: e.clientX, startY: e.clientY,
+    originX: crop.x, originY: crop.y,
+    scale: item.w / svg.getBoundingClientRect().width,
+  };
+});
+
+window.addEventListener('pointermove', e => {
+  if (!drag) return;
+  const { item, crop } = drag;
+  crop.x = clamp(drag.originX + (e.clientX - drag.startX) * drag.scale, 0, item.w - crop.w);
+  crop.y = clamp(drag.originY + (e.clientY - drag.startY) * drag.scale, 0, item.h - crop.h);
+  for (const r of drag.svg.querySelectorAll('.hole, .crop')) {
+    r.setAttribute('x', crop.x);
+    r.setAttribute('y', crop.y);
+  }
+});
+
+window.addEventListener('pointerup', () => {
+  if (!drag) return;
+  const { item, card, crop } = drag;
+  if (crop.x !== drag.originX || crop.y !== drag.originY) {
+    item.crops[`${item.orientation}_${item.manualIdx}`] = { x: crop.x, y: crop.y };
+    const opt = card.querySelector('select').options[item.manualIdx];
+    opt.textContent = sizeName(SIZES[item.orientation][item.manualIdx]) + ' ✓';
+  }
+  drag = null;
+});
+
+const drop = document.getElementById('drop');
+const fileInput = document.getElementById('file');
+drop.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', () => { addFiles(fileInput.files); fileInput.value = ''; });
+drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('over'); });
+drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+drop.addEventListener('drop', e => {
+  e.preventDefault();
+  drop.classList.remove('over');
+  addFiles(e.dataTransfer.files);
+});
+
+renderAll();
+</script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+{
+  "name": "Wall Art Cropper",
+  "short_name": "Cropper",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#111115",
+  "theme_color": "#111115",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
