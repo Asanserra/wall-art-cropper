@@ -129,6 +129,7 @@
     font-size: 15px;
     cursor: pointer;
   }
+  .upscale-hint { color: var(--gold); font-size: 13px; margin-bottom: 10px; }
   .generate:disabled { background: #333; color: #777; cursor: default; }
   .results { margin-top: 18px; border-top: 1px solid var(--border); padding-top: 16px; }
   .results-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; font-weight: 700; }
@@ -261,7 +262,12 @@ function cardHTML(item, i) {
   const sizes = SIZES[item.orientation];
   const scale = Math.min(680 / item.w, 320 / item.h);
   const is169 = Math.abs(item.w / item.h - 16 / 9) < 0.01;
-  const anySelected = item.selected.some(Boolean);
+  const picked = sizes.map((s, k) => k).filter(k => item.selected[k]);
+  const upscale = picked.length ? upscaleFactor(item, picked) : 1;
+  const willUpscale = upscale > 1 && !item.upscaled[upscale];
+  const upscaleHint = upscale === 1 ? '' : willUpscale
+    ? `Source is too small for 300 DPI: it will first be AI-upscaled ×${upscale} to ${item.w * upscale} × ${item.h * upscale}px (a minute or two; keep this tab visible, it pauses in the background).`
+    : `Using the AI-upscaled ×${upscale} version (${item.w * upscale} × ${item.h * upscale}px).`;
 
   const options = sizes.map((s, k) =>
     `<option value="${k}" ${k === item.manualIdx ? 'selected' : ''}>${sizeName(s)}${item.crops[`${item.orientation}_${k}`] ? ' ✓' : ''}</option>`
@@ -310,7 +316,8 @@ function cardHTML(item, i) {
       <button class="btn ${item.manual ? 'on' : ''}" data-action="manual">Manual crop: ${item.manual ? 'On' : 'Off'}</button>
       ${item.manual ? `<select data-action="pick">${options}</select>` : ''}
     </div>
-    <button class="generate" data-action="generate" ${anySelected ? '' : 'disabled'}>Generate Crops</button>
+    ${upscaleHint ? `<div class="upscale-hint">${upscaleHint}</div>` : ''}
+    <button class="generate" data-action="generate" ${picked.length ? '' : 'disabled'}>${willUpscale ? `Upscale ×${upscale} & Generate Crops` : 'Generate Crops'}</button>
     ${results}
   </div>`;
 }
